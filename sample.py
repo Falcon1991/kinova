@@ -4,6 +4,8 @@
 # the camera and depth outputs. The image is segmented to
 # identify the target object.
 #
+# This program is very similar to the point_cloud_demo program
+# but it includes the camera_viewer class to crop the depth image.
 #
 #@misc{wu2019detectron2,
 #  author =       {Yuxin Wu and Alexander Kirillov and Francisco Massa and
@@ -33,7 +35,7 @@ from observers.camera_viewer import CameraViewer
 # Parameters
 show_station_diagram = False
 
-show_toplevel_diagram = True
+show_toplevel_diagram = False
 
 gripper_type = "hande"
 
@@ -53,6 +55,7 @@ station.Finalize()
 
 
 # Commands
+# There are two sequences here you can use (cs or c)
 cs = CommandSequence([])
 cs.append(Command(
     name="FirstPos",
@@ -113,6 +116,7 @@ c.append(Command(
 builder = DiagramBuilder()
 station = builder.AddSystem(station)
 
+# Connecting the camera viewer to crop the depth image
 camera_viewer = builder.AddSystem(CameraViewer())
 camera_viewer.set_name("camera_viewer")
 
@@ -125,6 +129,7 @@ builder.Connect(
 
 
 # Add the controller
+# The start_sequence can be "None" or either of the two sequences above ("cs" or "c")
 controller = builder.AddSystem(DepthController(start_sequence=None, show_candidate_grasp=False))
 
 # Convert the depth image to a point cloud
@@ -134,7 +139,9 @@ point_cloud_generator = builder.AddSystem(DepthImageToPointCloud(
                                     fields=BaseField.kXYZs | BaseField.kRGBs))
 point_cloud_generator.set_name("point_cloud_generator")
 builder.Connect(
-#        station.GetOutputPort("camera_depth_image"),
+        # You can uncomment below and comment the camera_viewer output 
+        # to skip the modification of the depth image
+        #station.GetOutputPort("camera_depth_image"),
         camera_viewer.GetOutputPort("cropped_depth_image"),
         point_cloud_generator.depth_image_input_port())
 builder.Connect(
@@ -163,16 +170,18 @@ builder.Connect(
         point_cloud_generator.point_cloud_output_port(),
         meshcat_point_cloud.get_input_port())
 
-
-
+# Note: this section can be used in replacement of the point cloud controller
+"""
 Kp = 10*np.eye(6)
 Kd = 2*np.sqrt(Kp)
 
-#controller = builder.AddSystem(CommandSequenceController(
-#    cs,
-#    command_type=EndEffectorTarget.kTwist,
-#    Kp=Kp,
-#    Kd=Kd))
+controller = builder.AddSystem(CommandSequenceController(
+    cs,
+    command_type=EndEffectorTarget.kTwist,
+    Kp=Kp,
+    Kd=Kd))
+"""
+
 controller.set_name("controller")
 controller.ConnectToStation(builder, station)
 
@@ -197,5 +206,4 @@ simulator.set_publish_every_time_step(False)
 
 # Run
 simulator.Initialize()
-simulator.AdvanceTo(30.0)
-#type(var)
+simulator.AdvanceTo(30.0) # Runs for 30 seconds

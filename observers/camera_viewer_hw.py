@@ -58,8 +58,10 @@ class CameraViewer(LeafSystem):
 
         # Create example images which will be used to define the 
         # (abstract) import port type
+        # This is currently the only change from camera_viewer.py:
+        # The depth image is changed to type PixelType.kDepth16U from 32F to match the hardware input
         sample_color_image = Image[PixelType.kRgba8U](width=640,height=480)
-        sample_depth_image = Image[PixelType.kDepth32F](width=641,height=480)
+        sample_depth_image = Image[PixelType.kDepth16U](width=641,height=480)
 
         # Declare input ports
         self.color_image_port = self.DeclareAbstractInputPort(
@@ -79,7 +81,7 @@ class CameraViewer(LeafSystem):
         self.DeclareContinuousState(1)
 
     def DoCalcTimeDerivatives(self, context, continuous_state):
-        
+
         pass
         
         # This method is not being used anymore...

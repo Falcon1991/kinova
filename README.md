@@ -76,3 +76,9 @@ to select a grasp location.
 
 Note that you need to run a meshcat server before running the point cloud example. This is as simple as
 running `meshcat-server` in a terminal, assuming `drake/bin` has been added to the `$PATH`.
+
+### Sample Example
+
+The Sample programs are used to identify a specific object in an area with more than one to limit the robot's focus to the desired target. This works similarly to the peg pickup examples and uses Detectron2 to identify a specific object
+
+`sample.py` (simulation) and `sample_hw.py` (hardware)

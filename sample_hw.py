@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 from kinova_station import KinovaStationHardwareInterface, EndEffectorTarget
 from controllers import CommandSequenceController, CommandSequence, Command, PointCloudController
-
+from observers.camera_viewer_hw import CameraViewer
 from meshcat.servers.zmqserver import start_zmq_server_as_subprocess
 
 ########################### Parameters #################################
@@ -22,7 +22,7 @@ show_station_diagram = False
 
 # Make a plot of the diagram for this example, where only the inputs
 # and outputs of the station are shown
-show_toplevel_diagram = False
+show_toplevel_diagram = True
 
 ########################################################################
 
@@ -53,6 +53,8 @@ with KinovaStationHardwareInterface() as station:
     controller.set_name("controller")
     controller.ConnectToStation(builder, station)
 
+
+    # Setup camera_viewer 
     camera_viewer = builder.AddSystem(CameraViewer())
     camera_viewer.set_name("camera_viewer")
 
@@ -74,7 +76,7 @@ with KinovaStationHardwareInterface() as station:
     point_cloud_generator.set_name("point_cloud_generator")
 
     builder.Connect(
-            station.GetOutputPort("camera_depth_image"),
+            camera_viewer.GetOutputPort("cropped_depth_image"),
             point_cloud_generator.depth_image_input_port())
     builder.Connect(
             station.GetOutputPort("camera_transform"),
