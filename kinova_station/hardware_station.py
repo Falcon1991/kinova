@@ -375,7 +375,7 @@ class KinovaStationHardwareInterface(LeafSystem):
         cartesian_pose.x = pose[3]
         cartesian_pose.y = pose[4]
         cartesian_pose.z = pose[5]
-        
+
         e = threading.Event()
         notification_handle = self.base.OnNotificationActionTopic(
             self.check_for_end_or_abort(e),

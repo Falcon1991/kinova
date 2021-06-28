@@ -119,6 +119,7 @@ class PointCloudController(CommandSequenceController):
         indices = np.all(np.isfinite(point_cloud.xyzs()), axis=0)
         o3d_cloud = o3d.geometry.PointCloud()
         o3d_cloud.points = o3d.utility.Vector3dVector(point_cloud.xyzs()[:, indices].T)
+        print(o3d_cloud)
         if point_cloud.has_rgbs():
             o3d_cloud.colors = o3d.utility.Vector3dVector(point_cloud.rgbs()[:, indices].T / 255.)
 
@@ -143,6 +144,13 @@ class PointCloudController(CommandSequenceController):
             # The most likely reason for this is simply that all the points were outside
             # the cropped region.
             pass
+
+    def AppendMovement(self, com):
+        """
+        Edit the command sequence to add an immediate movement
+        """
+        self.cs.clear()
+        self.cs.append(com)
 
     def AppendPickupToStoredCommandSequence(self, grasp):
         """

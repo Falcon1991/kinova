@@ -118,6 +118,7 @@ class DepthController(CommandSequenceController):
         # Convert to Open3D format
         indices = np.all(np.isfinite(point_cloud.xyzs()), axis=0)
         o3d_cloud = o3d.geometry.PointCloud()
+        print(o3d_cloud)
         o3d_cloud.points = o3d.utility.Vector3dVector(point_cloud.xyzs()[:, indices].T)
         if point_cloud.has_rgbs():
             o3d_cloud.colors = o3d.utility.Vector3dVector(point_cloud.rgbs()[:, indices].T / 255.)
@@ -143,6 +144,15 @@ class DepthController(CommandSequenceController):
             # The most likely reason for this is simply that all the points were outside
             # the cropped region.
             pass
+
+        print(len(self.stored_point_clouds))
+
+    def AppendMovement(self, com):
+        """
+        Edit the command sequence to add an immediate movement
+        """
+        self.cs.clear()
+        self.cs.append(com)
 
     def AppendPickupToStoredCommandSequence(self, grasp):
         """
@@ -347,7 +357,7 @@ class DepthController(CommandSequenceController):
         t = context.get_time()
 
         if t < self.cs.total_duration():
-            if t % 5 == 0 and t != 0:
+            if t % 3 == 0 or t == 0:
                 # Only fetch the point clouds infrequently, since this is slow
                 point_cloud = self.point_cloud_input_port.Eval(context)
 

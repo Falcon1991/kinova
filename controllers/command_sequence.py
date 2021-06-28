@@ -87,3 +87,5 @@ class CommandSequence():
     def total_duration(self):
         return self.start_times[-1]
 
+    def clear(self):
+        self.commands = []

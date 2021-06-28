@@ -19,7 +19,9 @@
 from pydrake.all import *
 import cv2
 import torch
-
+import tkinter as tk
+#from tkinter import *
+from PIL import Image as Ime, ImageTk as imtk
 import matplotlib
 
 # Setup detectron2 logger
@@ -77,6 +79,8 @@ class CameraViewer(LeafSystem):
 
         # Dummy continuous variable so we update at each timestep
         self.DeclareContinuousState(1)
+        
+        self.once = False
 
     def DoCalcTimeDerivatives(self, context, continuous_state):
         
@@ -134,7 +138,7 @@ class CameraViewer(LeafSystem):
        
 
         # Different options for weights
-        #cfg.MODEL.WEIGHTS = os.path.join('clutter_maskrcnn_model.pt') 
+        #cfg.MODEL.WEIGHTS = os.path.join('R-50.pkl') 
         #cfg.MODEL.WEIGHTS = os.path.join('model_final.pth')
         cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("LVISv0.5-InstanceSegmentation/mask_rcnn_R_101_FPN_1x.yaml") 
         # So far, .5 101 FPN has worked best
@@ -175,9 +179,47 @@ class CameraViewer(LeafSystem):
         #depth_image.resize(640, 480)
         #masks = cv2.resize(masks, dsize=(480, 270), interpolation=cv2.INTER_CUBIC)
         
+        def clickYes():
+            self.once = True
+            window.destroy()
+
+        def clickNo():
+            window.destroy()
+
+        objects = 992 in classes or 300 in classes or 1131 in classes
+        #if classes contains these objects and !once:
+        if not self.once and objects:
+            window = tk.Tk()
+            
+            # Insert segmented image
+            cv2.imwrite("seg.jpg", out.get_image()[:, :, ::-1])
+            image_seg = Ime.open("seg.jpg")
+            test = imtk.PhotoImage(image_seg)
+            statement = tk.Label(window, text="Here is what we found:", image=test)
+            statement.image = test
+            statement.place(x=0, y=0)
+            statement.pack()
+            
+            # Insert mask image
+            cv2.imwrite("mask.jpg", masks[0])
+            im_mask = Ime.open("mask.jpg")
+            test2 = imtk.PhotoImage(im_mask)
+            prompt = tk.Label(window, text="Is this the object you want to pick up?", image=test2)
+            prompt.image = test2
+            prompt.place(x=1000, y=0)
+            prompt.pack()
+
+            # Insert buttons yes/no
+            b1 = tk.Button(window, text="Yes", command = clickYes)
+            b2 = tk.Button(window, text="No", command = clickNo)
+            b1.pack()
+            b2.pack()
+            
+            window.mainloop()
 
         # See if there is a detected object, and crop the depth image
         n, m, p = masks.shape 
+        
         
         if n != 0:
             # Crop depth image based on identified mask
@@ -198,9 +240,10 @@ class CameraViewer(LeafSystem):
             print(depth_image.data.shape)
             for i in range(x-1):
                 for j in range(y-1):
-                    if masks[0, i, j] == 0:
-                        depth_image.mutable_data[i, j] = 0
-
+                    #if masks[0, i, j] == 0:
+                    depth_image.mutable_data[i, j] = 0
+        
+        
         #cv2.imshow("image", depth_image.data)
         #cv2.waitKey()
 
@@ -227,6 +270,7 @@ class CameraViewer(LeafSystem):
             cv2.imshow("cropped", depth_image.data)
         """
         
+        output.SetFrom(AbstractValue.Make(depth_image))
 
         #print(color_image)
         #print(type(color_image))

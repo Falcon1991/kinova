@@ -9,9 +9,10 @@
 from pydrake.all import *
 import numpy as np
 import matplotlib.pyplot as plt
+import tkinter as tk
 
 from kinova_station import KinovaStationHardwareInterface, EndEffectorTarget
-from controllers import CommandSequenceController, CommandSequence, Command, PointCloudController
+from controllers import CommandSequenceController, CommandSequence, Command, DepthController
 from observers.camera_viewer_hw import CameraViewer
 from meshcat.servers.zmqserver import start_zmq_server_as_subprocess
 
@@ -22,7 +23,7 @@ show_station_diagram = False
 
 # Make a plot of the diagram for this example, where only the inputs
 # and outputs of the station are shown
-show_toplevel_diagram = True
+show_toplevel_diagram = False
 
 ########################################################################
 
@@ -40,10 +41,48 @@ with KinovaStationHardwareInterface() as station:
     station = builder.AddSystem(station)
 
     # Create the controller and connect inputs and outputs appropriately
-    Kp = 1*np.diag([100, 100, 100, 200, 200, 200])  # high gains needed to overcome
-    Kd = 2*np.sqrt(0.5*Kp)                          # significant joint friction
+    #Kp = 1*np.diag([100, 100, 100, 200, 200, 200])  # high gains needed to overcome
+    #Kd = 2*np.sqrt(0.5*Kp)                          # significant joint friction
+    Kp = .1*np.diag([100, 100, 100, 200, 200, 200])
+    Kd = 2*np.sqrt(.5*Kp)
 
-    controller = builder.AddSystem(PointCloudController(
+    # Custom start sequence
+    start_sequence = CommandSequence([])
+    start_sequence.append(Command(
+        name="front_view",
+        target_pose=np.array([0.7*np.pi, 0.0, 0.5*np.pi, 0.5, 0.0, 0.15]),
+        duration=1,
+        gripper_closed=False))
+    start_sequence.append(Command(
+        name="left_view",
+        target_pose=np.array([0.7*np.pi, 0.0, 0.3*np.pi, 0.6, 0.1, 0.15]),
+        duration=1,
+        gripper_closed=False))
+    start_sequence.append(Command(
+        name="front_view",
+        target_pose=np.array([0.7*np.pi, 0.0, 0.5*np.pi, 0.5, 0.0, 0.15]),
+        duration=1,
+        gripper_closed=False))
+    start_sequence.append(Command(
+        name="right_view",
+        target_pose=np.array([0.7*np.pi, 0.0, 0.8*np.pi, 0.6, -0.3, 0.15]),
+        duration=1,
+        gripper_closed=False))
+    start_sequence.append(Command(
+        name="home",
+        target_pose=np.array([0.5*np.pi, 0.0, 0.5*np.pi, 0.5, 0.0, 0.2]),
+        duration=1,
+        gripper_closed=False))
+    
+    cs = CommandSequence([])
+    cs.append(Command(
+        name="stay_still",
+        target_pose=np.array([.7*np.pi, 0.0, .5*np.pi, .5, 0.0, .1]),
+        duration=3,
+        gripper_closed=False))
+
+    controller = builder.AddSystem(DepthController(
+        start_sequence=cs,
         command_type=EndEffectorTarget.kWrench,  # wrench commands work best on hardware
         show_candidate_grasp=True,
         hardware=True,
@@ -52,8 +91,7 @@ with KinovaStationHardwareInterface() as station:
 
     controller.set_name("controller")
     controller.ConnectToStation(builder, station)
-
-
+    
     # Setup camera_viewer 
     camera_viewer = builder.AddSystem(CameraViewer())
     camera_viewer.set_name("camera_viewer")
@@ -64,8 +102,7 @@ with KinovaStationHardwareInterface() as station:
     builder.Connect(
         station.GetOutputPort("camera_depth_image"),
         camera_viewer.GetInputPort("depth_image"))
-
-
+    
 
     # Add converter from depth images to point clouds
     point_cloud_generator = builder.AddSystem(DepthImageToPointCloud(
@@ -77,6 +114,7 @@ with KinovaStationHardwareInterface() as station:
 
     builder.Connect(
             camera_viewer.GetOutputPort("cropped_depth_image"),
+            #station.GetOutputPort("camera_depth_image"),
             point_cloud_generator.depth_image_input_port())
     builder.Connect(
             station.GetOutputPort("camera_transform"),
@@ -121,7 +159,8 @@ with KinovaStationHardwareInterface() as station:
         plt.show()
 
     # Set default arm positions
-    station.go_home(name="Home")
+    #station.go_home(name="Home")
+    station.send_pose_command((.7*np.pi, 0.0, .5*np.pi, .5, 0.0, .1))
 
     # Set up simulation
     simulator = Simulator(diagram, diagram_context)
@@ -135,6 +174,48 @@ with KinovaStationHardwareInterface() as station:
     # Run simulation
     simulator.Initialize()
     simulator.AdvanceTo(30.0)
+
+    # Look left. Is the object there?
+    com = Command(
+            name="look_left",
+            target_pose=np.array([.7*np.pi, 0.0, .8*np.pi, .4, 0.1, .1]),
+            duration=3,
+            gripper_closed=False)
+    controller.AppendMovement(com)
+    
+    # Prompt the user if this is the object they want 
+
+
+    # Look ahead. Is the object there?
+    com = Command(
+            name="look_ahead",
+            target_pose=np.array([.7*np.pi, 0.0, .5*np.pi, .5, 0.0, .2]),
+            duration=3,
+            gripper_closed=False)
+    controller.AppendMovement(com)
+    
+    # Look right. Is the object there?
+    com = Command(
+            name="look_right",
+            target_pose=np.array([.7*np.pi, 0.0, .3*np.pi, .4, -0.1, .1]),
+            duration=3,
+            gripper_closed=False)
+    #controller.AppendMovement(com)
+
+    """
+    # Set up simulation
+    simulator = Simulator(diagram, diagram_context)
+    simulator.set_target_realtime_rate(1.0)
+    simulator.set_publish_every_time_step(False)
+
+    integration_scheme = "explicit_euler"
+    time_step = 0.10
+    ResetIntegratorFromFlags(simulator, integration_scheme, time_step)
+
+    # Run simulation
+    simulator.Initialize()
+    simulator.AdvanceTo(30.0)
+    """
 
     # Print rate data
     print("")

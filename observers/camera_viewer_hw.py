@@ -19,7 +19,7 @@
 from pydrake.all import *
 import cv2
 import torch
-
+import tkinter as tk
 import matplotlib
 
 # Setup detectron2 logger
@@ -102,7 +102,7 @@ class CameraViewer(LeafSystem):
 
         image = color_image.data
         image = np.delete(image, 3, 1)
-
+        
         matplotlib.image.imsave("color.jpg", image)
         #image = np.delete(depth_image.data, 3, 1)
         #matplotlib.image.imsave('dotplot.png', depth_image.data)
@@ -177,6 +177,20 @@ class CameraViewer(LeafSystem):
         #depth_image.resize(640, 480)
         #masks = cv2.resize(masks, dsize=(480, 270), interpolation=cv2.INTER_CUBIC)
         
+        once = False
+        objects = classes.contains()
+        #if classes contains these objects and !once:
+        if not once:
+            window = tk.Tk()
+            statement = tk.Label(text="Here is what we found:")
+            prompt = tk.Label(text="Is this the object you want to pick up?")
+            image_seg = cv2.imread("image_seg",out.get_image()[:, :, ::-1])
+            image_mask = cv2.imread("image_mask",masks[0])
+            statement['image'] = image_seg
+            prompt['image'] = image_mask
+            window.mainloop()
+            once = True
+
 
         # See if there is a detected object, and crop the depth image
         n, m, p = masks.shape 
@@ -200,8 +214,8 @@ class CameraViewer(LeafSystem):
             print(depth_image.data.shape)
             for i in range(x-1):
                 for j in range(y-1):
-                    if masks[0, i, j] == 0:
-                        depth_image.mutable_data[i, j] = 0
+                    #if masks[0, i, j] == 0:
+                    depth_image.mutable_data[i, j] = 0
 
         #cv2.imshow("image", depth_image.data)
         #cv2.waitKey()
