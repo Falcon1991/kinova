@@ -43,8 +43,8 @@ with KinovaStationHardwareInterface() as station:
     # Create the controller and connect inputs and outputs appropriately
     #Kp = 1*np.diag([100, 100, 100, 200, 200, 200])  # high gains needed to overcome
     #Kd = 2*np.sqrt(0.5*Kp)                          # significant joint friction
-    Kp = .1*np.diag([100, 100, 100, 200, 200, 200])
-    Kd = 2*np.sqrt(.5*Kp)
+    Kp = .07*np.diag([100, 100, 100, 200, 200, 200])
+    Kd = 3*np.sqrt(.5*Kp)
 
     # Custom start sequence
     start_sequence = CommandSequence([])
@@ -78,7 +78,7 @@ with KinovaStationHardwareInterface() as station:
     cs.append(Command(
         name="stay_still",
         target_pose=np.array([.7*np.pi, 0.0, .5*np.pi, .5, 0.0, .1]),
-        duration=3,
+        duration=0,
         gripper_closed=False))
 
     controller = builder.AddSystem(DepthController(
@@ -160,47 +160,7 @@ with KinovaStationHardwareInterface() as station:
 
     # Set default arm positions
     #station.go_home(name="Home")
-    station.send_pose_command((.7*np.pi, 0.0, .5*np.pi, .5, 0.0, .1))
-
-    # Set up simulation
-    simulator = Simulator(diagram, diagram_context)
-    simulator.set_target_realtime_rate(1.0)
-    simulator.set_publish_every_time_step(False)
-
-    integration_scheme = "explicit_euler"
-    time_step = 0.10
-    ResetIntegratorFromFlags(simulator, integration_scheme, time_step)
-
-    # Run simulation
-    simulator.Initialize()
-    simulator.AdvanceTo(30.0)
-
-    # Look left. Is the object there?
-    com = Command(
-            name="look_left",
-            target_pose=np.array([.7*np.pi, 0.0, .8*np.pi, .4, 0.1, .1]),
-            duration=3,
-            gripper_closed=False)
-    controller.AppendMovement(com)
-    
-    # Prompt the user if this is the object they want 
-
-
-    # Look ahead. Is the object there?
-    com = Command(
-            name="look_ahead",
-            target_pose=np.array([.7*np.pi, 0.0, .5*np.pi, .5, 0.0, .2]),
-            duration=3,
-            gripper_closed=False)
-    controller.AppendMovement(com)
-    
-    # Look right. Is the object there?
-    com = Command(
-            name="look_right",
-            target_pose=np.array([.7*np.pi, 0.0, .3*np.pi, .4, -0.1, .1]),
-            duration=3,
-            gripper_closed=False)
-    #controller.AppendMovement(com)
+    station.send_pose_command((.55*np.pi, 0.0, .5*np.pi, .5, 0.0, .1))
 
     """
     # Set up simulation
@@ -216,6 +176,61 @@ with KinovaStationHardwareInterface() as station:
     simulator.Initialize()
     simulator.AdvanceTo(30.0)
     """
+    here, count = camera_viewer.isHere()
+    if count == 0:
+        # Look left. Is the object there?
+        com = Command(
+                name="look_left",
+                target_pose=np.array([.55*np.pi, 0.0, .9*np.pi, .4, 0.1, .1]),
+                duration=3,
+                gripper_closed=False)
+        controller.AppendMovement(com)
+    
+    # Check if the object is over here 
+    if count != 0:
+        # Look ahead. Is the object there?
+        com = Command(
+                name="look_ahead",
+                target_pose=np.array([.7*np.pi, 0.0, .5*np.pi, .5, 0.0, .2]),
+                duration=3,
+                gripper_closed=False)
+        controller.AppendMovement(com)
+    
+        # Check if the object is here
+        here, count = camera_viewer.isHere()
+
+        if not here:
+            # Look right. Is the object there?
+            com = Command(
+                    name="look_right",
+                    target_pose=np.array([.7*np.pi, 0.0, .3*np.pi, .4, -0.1, .1]),
+                    duration=3,
+                    gripper_closed=False)
+            controller.AppendMovement(com)
+    
+    # If the object is found, find grasp
+    if here:
+        com = Command(
+                name="look_right",
+                target_pose=np.array([.7*np.pi, 0.0, .5*np.pi, .4, 0.0, .1]),
+                duration=0,
+                gripper_closed=False)
+        controller.AppendMovement(com)
+
+    
+    # Set up simulation
+    simulator = Simulator(diagram, diagram_context)
+    simulator.set_target_realtime_rate(1.0)
+    simulator.set_publish_every_time_step(False)
+
+    integration_scheme = "explicit_euler"
+    time_step = 0.10
+    ResetIntegratorFromFlags(simulator, integration_scheme, time_step)
+
+    # Run simulation
+    simulator.Initialize()
+    simulator.AdvanceTo(30.0)
+    
 
     # Print rate data
     print("")

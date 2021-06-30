@@ -112,6 +112,13 @@ c.append(Command(
     duration=4,
     gripper_closed=False))
 
+this = CommandSequence([])
+this.append(Command(
+    name="stay_still",
+    target_pose=np.array([.7*np.pi, 0.0, .5*np.pi, .5, 0.0, .1]),
+    duration=0,
+    gripper_closed=False))
+
 
 builder = DiagramBuilder()
 station = builder.AddSystem(station)
@@ -130,7 +137,7 @@ builder.Connect(
 
 # Add the controller
 # The start_sequence can be "None" or either of the two sequences above ("cs" or "c")
-controller = builder.AddSystem(DepthController(start_sequence=None, show_candidate_grasp=False))
+controller = builder.AddSystem(DepthController(start_sequence=this, show_candidate_grasp=False))
 
 # Convert the depth image to a point cloud
 # Note that this system block is slow
@@ -195,6 +202,50 @@ if show_toplevel_diagram:
     plt.figure()
     plot_system_graphviz(diagram,max_depth=1)
     plt.show()
+
+#station.send_pose_command((.55*np.pi, 0.0, .5*np.pi, .5, 0.0, .1))
+
+here, count = camera_viewer.isHere()
+if count == 0:
+    # Look left. Is the object there?
+    com = Command(
+            name="look_left",
+            target_pose=np.array([.55*np.pi, 0.0, .9*np.pi, .4, 0.1, .1]),
+            duration=3,
+            gripper_closed=False)
+    controller.AppendMovement(com)
+
+# Check if the object is over here 
+if count != 0:
+    # Look ahead. Is the object there?
+    com = Command(
+            name="look_ahead",
+            target_pose=np.array([.7*np.pi, 0.0, .5*np.pi, .5, 0.0, .2]),
+            duration=3,
+            gripper_closed=False)
+    controller.AppendMovement(com)
+
+    # Check if the object is here
+    here, count = camera_viewer.isHere()
+
+    if not here:
+        # Look right. Is the object there?
+        com = Command(
+                name="look_right",
+                target_pose=np.array([.7*np.pi, 0.0, .3*np.pi, .4, -0.1, .1]),
+                duration=3,
+                gripper_closed=False)
+        controller.AppendMovement(com)
+
+# If the object is found, find grasp
+if here:
+    com = Command(
+            name="look_right",
+            target_pose=np.array([.7*np.pi, 0.0, .5*np.pi, .4, 0.0, .1]),
+            duration=1,
+            gripper_closed=False)
+    controller.AppendMovement(com)
+
 
 # Default position
 station.go_home(diagram, diagram_context, name="Custom")

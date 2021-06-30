@@ -1,3 +1,4 @@
+#from home.discoverlab.kinova_drake.controllers.command_sequence import CommandSequence
 from controllers.command_sequence_controller import *
 from kinova_station.common import draw_open3d_point_cloud, draw_points
 
@@ -118,8 +119,8 @@ class DepthController(CommandSequenceController):
         # Convert to Open3D format
         indices = np.all(np.isfinite(point_cloud.xyzs()), axis=0)
         o3d_cloud = o3d.geometry.PointCloud()
-        print(o3d_cloud)
         o3d_cloud.points = o3d.utility.Vector3dVector(point_cloud.xyzs()[:, indices].T)
+        print(o3d_cloud)
         if point_cloud.has_rgbs():
             o3d_cloud.colors = o3d.utility.Vector3dVector(point_cloud.rgbs()[:, indices].T / 255.)
 
@@ -194,8 +195,13 @@ class DepthController(CommandSequenceController):
             gripper_closed=False))
         self.cs.append(Command(
             name="grasp",
-            target_pose=grasp,
-            duration=3,
+            target_pose=grasp - np.array([0,0,0,.1,0,0]),                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
+            duration=3,                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     
+            gripper_closed=False))
+        self.cs.append(Command(
+            name="grasp2",
+            target_pose=grasp + np.array([0,0,0,.05,0,-.05]),
+            duration=1,
             gripper_closed=False))
         self.cs.append(Command(
             name="close_gripper",
@@ -374,10 +380,29 @@ class DepthController(CommandSequenceController):
             self.merged_point_cloud = self.merged_point_cloud.voxel_down_sample(voxel_size=0.005)
             
             # Find a collision-free grasp location using a genetic algorithm
-            grasp = self.FindGrasp()
+            #grasp = self.FindGrasp()
+            
+            cloud = self.merged_point_cloud
+            found = False
+            # Search for point to use to find grasp
+            while not found:
+                index = np.random.randint(0, len(cloud.points))
+                n_WS = np.asarray(cloud.normals[index])
+                if n_WS[2] > 0 and n_WS[2] < np.pi and n_WS[0] < (np.pi-.1) and n_WS[0] > .1:
+                    found = True
+
+            print(n_WS)
+            #n_WS = RotationMatrix(RollPitchYaw(n_WS)) * RotationMatrix(RollPitchYaw([0, 0, -np.pi]))
+            n_WS = (n_WS * [0, 0, 1]) + [.5*np.pi, 0, 0]
+            com = Command(
+                name="look_right",
+                target_pose=np.hstack((n_WS, [.6, 0.0, .3])),   # Change PitchRollYaw to vector of n_WS normal
+                duration=1,
+                gripper_closed=False)
+            self.AppendMovement(com)
 
             # Modify the stored command sequence to pick up the object from this grasp location 
-            self.AppendPickupToStoredCommandSequence(grasp)
+            #self.AppendPickupToStoredCommandSequence(grasp)
 
         # Follow the command sequence stored in self.cs
         CommandSequenceController.CalcEndEffectorCommand(self, context, output)
