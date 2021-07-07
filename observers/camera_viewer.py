@@ -261,8 +261,8 @@ class CameraViewer(LeafSystem):
                 print(masks.shape)
                 x, y, z = depth_image.data.shape
                 print(depth_image.data.shape)
-                for i in range(x-1):
-                    for j in range(y-1):
+                for i in range(x):
+                    for j in range(y):
                         #if masks[0, i, j] == 0:
                         depth_image.mutable_data[i, j] = 0
             
@@ -292,6 +292,15 @@ class CameraViewer(LeafSystem):
                 depth_image = depth_image.data[y:y+h, x:x+w]
                 cv2.imshow("cropped", depth_image.data)
             """
+        
+        else:
+            # If the point cloud of the object is already stored,
+            # do not get anymore point clouds
+            x, y, z = depth_image.data.shape
+            for i in range(x):
+                for j in range(y):
+                    #if masks[0, i, j] == 0:
+                    depth_image.mutable_data[i, j] = 0 
         
         output.SetFrom(AbstractValue.Make(depth_image))
 

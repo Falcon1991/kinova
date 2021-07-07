@@ -43,6 +43,7 @@ with KinovaStationHardwareInterface() as station:
     # Create the controller and connect inputs and outputs appropriately
     #Kp = 1*np.diag([100, 100, 100, 200, 200, 200])  # high gains needed to overcome
     #Kd = 2*np.sqrt(0.5*Kp)                          # significant joint friction
+    #.07
     Kp = .07*np.diag([100, 100, 100, 200, 200, 200])
     Kd = 3*np.sqrt(.5*Kp)
 
@@ -77,8 +78,8 @@ with KinovaStationHardwareInterface() as station:
     cs = CommandSequence([])
     cs.append(Command(
         name="stay_still",
-        target_pose=np.array([.7*np.pi, 0.0, .5*np.pi, .5, 0.0, .1]),
-        duration=0,
+        target_pose=np.array([.55*np.pi, 0.0, .5*np.pi, .5, 0.0, .1]),
+        duration=3,
         gripper_closed=False))
 
     controller = builder.AddSystem(DepthController(
@@ -175,7 +176,7 @@ with KinovaStationHardwareInterface() as station:
     # Run simulation
     simulator.Initialize()
     simulator.AdvanceTo(30.0)
-    """
+    
     here, count = camera_viewer.isHere()
     if count == 0:
         # Look left. Is the object there?
@@ -215,8 +216,8 @@ with KinovaStationHardwareInterface() as station:
                 target_pose=np.array([.7*np.pi, 0.0, .5*np.pi, .4, 0.0, .1]),
                 duration=0,
                 gripper_closed=False)
-        controller.AppendMovement(com)
-
+       controller.AppendMovement(com)
+    """
     
     # Set up simulation
     simulator = Simulator(diagram, diagram_context)

@@ -167,8 +167,8 @@ class CameraViewer(LeafSystem):
             
 
             # Another option to show the segmented image (uncomment both)
-            #cv2.imshow("image_seg",out.get_image()[:, :, ::-1])
-            #cv2.waitKey()
+            cv2.imshow("image_seg",out.get_image()[:, :, ::-1])
+            cv2.waitKey()
             
 
             # Get the masks, classes, and boxes to crop the depth image 
@@ -196,15 +196,19 @@ class CameraViewer(LeafSystem):
                 window.destroy()
             
             n, m, p = masks.shape
-            objects = 992 in classes or 300 in classes or 1131 in classes
+            objects = 716 in classes or 992 in classes or 1036 in classes or 1131 in classes 
             #if classes contains these objects and !once:
             if (not self.once and objects) or self.dir:
-                for k in range(n):
+                index = []
+                for g in range(n):
+                    if classes[g] == 716 or classes[g] == 992 or classes[g] == 1036 or classes[g] == 1131:
+                        index.append(g)
+                for k in range(len(index)):
                     window = tk.Tk()
                     self.dir = False
                     # Insert segmented image
-                    seg_flip = cv2.rotate(out.get_image()[:, :, ::-1], cv2.ROTATE_180)
-                    cv2.imwrite("seg.jpg", seg_flip)
+                    #seg_flip = cv2.rotate(out.get_image()[:, :, ::-1], cv2.ROTATE_180)
+                    cv2.imwrite("seg.jpg", out.get_image()[:, :, ::-1])
                     image_seg = Ime.open("seg.jpg")
                     test = imtk.PhotoImage(image_seg)
                     state = tk.Label(window, text="Here is what we found:")
@@ -215,14 +219,14 @@ class CameraViewer(LeafSystem):
                     statement.pack()
                 
                     # Insert mask image
-                    mask_flip = cv2.rotate(masks[k], cv2.ROTATE_180)
+                    #mask_flip = cv2.rotate(masks[k], cv2.ROTATE_180)
                     
                     for q in range(m):
                         for w in range(p):
-                            if mask_flip[q, w] != 0:
-                                mask_flip[q, w] = 100
+                            if masks[index[k], q, w] != 0:
+                                masks[index[k], q, w] = 100
 
-                    cv2.imwrite("mask.jpg", mask_flip)
+                    cv2.imwrite("mask.jpg", masks[index[k]])
                     im_mask = Ime.open("mask.jpg")
                     test2 = imtk.PhotoImage(im_mask)
                     prompt = tk.Label(window, text="Is this the object you want to pick up?", image=test2)
@@ -246,7 +250,7 @@ class CameraViewer(LeafSystem):
                         x, y, z = depth_image.data.shape
                         for i in range(x-1):
                             for j in range(y-1):
-                                if masks[k, i, j] == 0:
+                                if masks[index[k], i, j] == 0:
                                     depth_image.mutable_data[i, j] = 0 
                         # Save mask incase the next frame does not identify one
                         np.save('save.npy', masks)
@@ -262,8 +266,8 @@ class CameraViewer(LeafSystem):
                 print(masks.shape)
                 x, y, z = depth_image.data.shape
                 print(depth_image.data.shape)
-                for i in range(x-1):
-                    for j in range(y-1):
+                for i in range(x):
+                    for j in range(y):
                         #if masks[0, i, j] == 0:
                         depth_image.mutable_data[i, j] = 0
             
@@ -294,6 +298,15 @@ class CameraViewer(LeafSystem):
                 cv2.imshow("cropped", depth_image.data)
             """
         
+        else:
+            # If the point cloud of the object is already stored,
+            # do not get anymore point clouds
+            x, y, z = depth_image.data.shape
+            for i in range(x):
+                for j in range(y):
+                    #if masks[0, i, j] == 0:
+                    depth_image.mutable_data[i, j] = 0 
+
         output.SetFrom(AbstractValue.Make(depth_image))
 
         #print(color_image)

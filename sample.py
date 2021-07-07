@@ -45,7 +45,7 @@ n = np.zeros((1, 480, 270))
 np.save('save.npy', n)
 
 station = KinovaStation(time_step=.002)
-station.SetupDualPegScenario(gripper_type=gripper_type, arm_damping=False, peg1_position=[.8, 0.1, .1], peg2_position=[.75,-0.1,0.1])
+station.SetupDualPegScenario(gripper_type=gripper_type, arm_damping=False, peg1_position=[.8, 0.1, .1], peg1_rotation=[0,np.pi/2,.5*np.pi], peg2_position=[.75,-0.1,0.1], peg2_rotation=[0,np.pi/2,.5*np.pi])
 #station.SetupSinglePegScenario(gripper_type=gripper_type, arm_damping=False)
 station.AddCamera()
 station.ConnectToMeshcatVisualizer(start_server=False)
@@ -115,8 +115,8 @@ c.append(Command(
 this = CommandSequence([])
 this.append(Command(
     name="stay_still",
-    target_pose=np.array([.7*np.pi, 0.0, .5*np.pi, .5, 0.0, .1]),
-    duration=0,
+    target_pose=np.array([.55*np.pi, 0.0, .5*np.pi, .5, 0.0, .1]),
+    duration=1,
     gripper_closed=False))
 
 
@@ -204,7 +204,7 @@ if show_toplevel_diagram:
     plt.show()
 
 #station.send_pose_command((.55*np.pi, 0.0, .5*np.pi, .5, 0.0, .1))
-
+"""
 here, count = camera_viewer.isHere()
 if count == 0:
     # Look left. Is the object there?
@@ -245,7 +245,7 @@ if here:
             duration=1,
             gripper_closed=False)
     controller.AppendMovement(com)
-
+"""
 
 # Default position
 station.go_home(diagram, diagram_context, name="Custom")

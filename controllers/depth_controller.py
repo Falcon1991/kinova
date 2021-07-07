@@ -103,6 +103,8 @@ class DepthController(CommandSequenceController):
                                                prefix="candidate_grasp")
             self.meshcat.load()
         
+        self.count = 4
+        self.reverse = False
         self.plant.Finalize()
         self.diagram = builder.Build()
         self.diagram_context = self.diagram.CreateDefaultContext()
@@ -356,22 +358,252 @@ class DepthController(CommandSequenceController):
             print("===> Failed to converge to an optimal grasp: retrying.")
             return self.FindGrasp()
 
+    def locateObject(self, cloud=None):
+        """
+        This method orients the gripper to align with the object and
+        moves teh gripper to line up with the object. Then it will
+        travel .1 to te object and grab it. Some trigonometry is used here
+        to calculate the gripper poition based on the point cloud.
+        """
+
+        if cloud is None:
+            cloud = self.merged_point_cloud
+
+        cloud = self.merged_point_cloud
+        print(cloud)
+        
+        total = [0, 0, 0]
+        ave = [0, 0, 0]
+        count = 0
+        for i in range(len(cloud.points)):
+            n_WS = np.asarray(cloud.normals[i])
+            p_WS = np.asarray(cloud.points[i])
+            if n_WS[2] > 0 and n_WS[2] < np.pi and n_WS[0] < (np.pi - .005) and n_WS[0] > .005:
+                total[0] += p_WS[0]
+                total[1] += p_WS[1]
+                total[2] += p_WS[2]
+                count += 1
+
+        ave[0] = total[0] / count
+        ave[1] = total[1] / count
+        ave[2] = total[2] / count
+
+        cluster = []
+        cluster_p = []
+        c = 0
+        for i in range(len(cloud.points)):
+            n1_WS = np.asarray(cloud.normals[i])
+            p1_WS = np.asarray(cloud.points[i])
+            c = 0
+            for j in range(len(cloud.points)):
+                n2_WS = np.asarray(cloud.normals[j])
+                close0 = (math.fabs(n1_WS[0]-n2_WS[0]) < .1)
+                close1 = (math.fabs(n1_WS[1]-n2_WS[1]) < .1)
+                close2 = (math.fabs(n1_WS[2]-n2_WS[2]) < .1)    
+                if close0:
+                    if close1:
+                        if close2:
+                            c += 1
+            if c > 40:
+                cluster.append(n1_WS)
+                cluster_p.append(p1_WS)
+
+
+        #print("This is the length: ", len(cluster))
+
+        clusters = []
+        clusters_p = []
+        while len(cluster) > 0:
+            temp = []
+            temp_p = []
+            ex = cluster[0]
+            temp.append(ex)
+            temp_p.append(cluster_p[0])
+            del cluster[0]
+            del cluster_p[0]
+            toRemove = []
+            for i in range(len(cluster)):
+                act = cluster[i]
+                close0 = (math.fabs(ex[0]-act[0]) < .1)
+                close1 = (math.fabs(ex[1]-act[1]) < .1)
+                close2 = (math.fabs(ex[2]-act[2]) < .1)    
+                if close0:
+                    if close1:
+                        if close2:
+                            temp.append(act)
+                            temp_p.append(cluster_p[i])
+                            toRemove.append(i)
+
+
+            numDeleted = 0
+            for i in range(len(toRemove)):
+                del cluster[toRemove[i] - numDeleted]
+                del cluster_p[toRemove[i] - numDeleted]
+                numDeleted += 1
+            clusters.append(temp)
+            clusters_p.append(temp_p)
+
+        print('Num of clusters',len(clusters))
+        print(clusters)
+
+        sides = []
+        sides_p = []
+        for i in range(len(clusters)):
+            side = [0, 0, 0]
+            side_p = [0, 0, 0]
+            for j in range(len(clusters[i])):
+                side[0] += clusters[i][j][0]
+                side[1] += clusters[i][j][1]
+                side[2] += clusters[i][j][2]
+
+                side_p[0] += clusters_p[i][j][0]
+                side_p[1] += clusters_p[i][j][1]
+                side_p[2] += clusters_p[i][j][2]
+
+            side[0] /= len(clusters[i])
+            side[1] /= len(clusters[i])
+            side[2] /= len(clusters[i])
+
+            side_p[0] /= len(clusters_p[i])
+            side_p[1] /= len(clusters_p[i])
+            side_p[2] /= len(clusters_p[i])
+            sides.append(side)
+            sides_p.append(side_p)
+
+        print(sides)
+        found = False
+        # Search for point to use to find grasp
+        for i in range(len(sides)):
+            n_WS = np.asarray(sides[i])
+            p_WS = np.asarray(sides_p[i])
+            if n_WS[2] > .01 and n_WS[2] < (np.pi - .01) and n_WS[0] < (np.pi - .01) and n_WS[0] > .01:
+                break
+
+        #p_WS = np.asarray(cloud.points[index])
+        #print(n_WS)
+        #print(p_WS)
+
+        # Find the correct pitch/roll/yaw for the arm
+        #n_WS = RotationMatrix(RollPitchYaw(n_WS)) * RotationMatrix(RollPitchYaw([0, 0, -np.pi]))
+        n_WS = (n_WS * [0, 0, 1]) + [.5*np.pi, 0, .5*np.pi]
+
+        # Calculate the position for the arm to be .1 away from object
+        Xo = p_WS[0]
+        Yo = p_WS[1]
+        Xg = .1 * math.sin(np.pi - n_WS[2])
+        Yg = .1 * math.cos(np.pi - n_WS[2])
+        X = Xo - Xg
+        Y = Yo - Yg
+        X1 = Xo + (Xg/4)
+        Y1 = Yo + (Yg/4)
+
+
+        # Orient gripper and move .1 straight away from the object
+        self.cs.append(Command(
+            name="line_up",
+            target_pose=np.hstack([n_WS, [X, Y, .1]]),   # Change PitchRollYaw to vector of n_WS normal
+            duration=2,
+            gripper_closed=False))
+        self.cs.append(Command(
+            name="line_up2",
+            target_pose=np.hstack([n_WS, [X, Y, .1]]),   # Change PitchRollYaw to vector of n_WS normal
+            duration=2,
+            gripper_closed=False))
+        #self.AppendMovement(com)
+        
+        self.cs.append(Command(
+            name="move_towards",
+            target_pose=np.hstack([n_WS, [X1, Y1, .1]]),
+            duration=2,
+            gripper_closed=False))
+        self.cs.append(Command(
+            name="grip",
+            target_pose=np.hstack([n_WS, [X1, Y1, .1]]),
+            duration=1,
+            gripper_closed=True))
+        self.cs.append(Command(
+            name="pick_up",
+            target_pose=np.array([.5*np.pi, 0, .5*np.pi, .5, 0, .3]),
+            duration=2,
+            gripper_closed=True))
+
     def CalcEndEffectorCommand(self, context, output):
         """
         Compute and send an end-effector twist command.
         """
+
         t = context.get_time()
+        if t < self.cs.total_duration() and len(self.stored_point_clouds) == 0:
+            # Only fetch the point clouds infrequently, since this is slow
+            point_cloud = self.point_cloud_input_port.Eval(context)
 
-        if t < self.cs.total_duration():
-            if t % 3 == 0 or t == 0:
-                # Only fetch the point clouds infrequently, since this is slow
-                point_cloud = self.point_cloud_input_port.Eval(context)
-
-                # Convert to Open3D, crop, compute normals, and save
-                X_camera = self.camera_transform_port.Eval(context)
+            # Convert to Open3D, crop, compute normals, and save
+            X_camera = self.camera_transform_port.Eval(context)
+            indices = np.all(np.isfinite(point_cloud.xyzs()), axis=0)
+            
+            # Only save the point cloud if there are points
+            if " 0 " not in str(o3d.utility.Vector3dVector(point_cloud.xyzs()[:, indices].T)):
                 self.StorePointCloud(point_cloud, X_camera.translation())
+            
+            # This was my original idea of 3 main positions
+            """
+            # self.count is used to determine which command to use for the arm to look left and right
+            if t % 1 == 0:
+                self.count += 1
+            if self.count == 5:
+                self.count = 1
+
+            if self.count == 1:
+                # Look left. Is the object there?
+                com = Command(
+                        name="look_left",
+                        target_pose=np.array([.55*np.pi, 0.0, .9*np.pi, .4, 0.1, .1]),
+                        duration=2,
+                        gripper_closed=False)
+                self.AppendMovement(com)
+
+            elif self.count == 2 or self.count == 4:
+                # Look ahead. Is the object there?
+                com = Command(
+                        name="look_ahead",
+                        target_pose=np.array([.55*np.pi, 0.0, .5*np.pi, .5, 0.0, .1]),
+                        duration=2,
+                        gripper_closed=False)
+                self.AppendMovement(com)
+            elif self.count == 3:
+                # Look right. Is the object there?
+                com = Command(
+                        name="look_right",
+                        target_pose=np.array([.55*np.pi, 0.0, .1*np.pi, .4, -0.1, .1]),
+                        duration=2,
+                        gripper_closed=False)
+                self.AppendMovement(com)
+            """
+            
+            # This is the current method to save space and add many different positions
+            # Use this variable to determine number of positions of arm (ex: step = 1 means there are 10 steps in 180 degrees)
+            step = 1
+
+            # Count up or down depending on which position (left/right) the arm was in
+            if t % .1 == 0 and not self.reverse:
+                self.count += step
+            elif t % .1 == 0:
+                self.count -= step
+            if self.count == 10:
+                self.reverse == True
+            elif self.count == 0:
+                self.reverse == False
+
+            # The command is adjusted every time step to conituously look left and right
+            com = Command(
+                    name="look_left/right",
+                    target_pose=np.array([.55*np.pi, 0.0, (self.count/10)*np.pi, .4, 0, .1]),
+                    duration=1,
+                    gripper_closed=False)
+            self.AppendMovement(com)
 
         elif self.merged_point_cloud is None:
+
             # Merge stored point clouds and downsample
             self.merged_point_cloud = self.stored_point_clouds[0]    # Just adding together may not
             for i in range(1, len(self.stored_point_clouds)):        # work very well on hardware...
@@ -382,27 +614,12 @@ class DepthController(CommandSequenceController):
             # Find a collision-free grasp location using a genetic algorithm
             #grasp = self.FindGrasp()
             
-            cloud = self.merged_point_cloud
-            found = False
-            # Search for point to use to find grasp
-            while not found:
-                index = np.random.randint(0, len(cloud.points))
-                n_WS = np.asarray(cloud.normals[index])
-                if n_WS[2] > 0 and n_WS[2] < np.pi and n_WS[0] < (np.pi-.1) and n_WS[0] > .1:
-                    found = True
-
-            print(n_WS)
-            #n_WS = RotationMatrix(RollPitchYaw(n_WS)) * RotationMatrix(RollPitchYaw([0, 0, -np.pi]))
-            n_WS = (n_WS * [0, 0, 1]) + [.5*np.pi, 0, 0]
-            com = Command(
-                name="look_right",
-                target_pose=np.hstack((n_WS, [.6, 0.0, .3])),   # Change PitchRollYaw to vector of n_WS normal
-                duration=1,
-                gripper_closed=False)
-            self.AppendMovement(com)
-
             # Modify the stored command sequence to pick up the object from this grasp location 
             #self.AppendPickupToStoredCommandSequence(grasp)
+
+            # Call a method to calculate the movements to pick up the object based on the point cloud
+            self.locateObject()
+
 
         # Follow the command sequence stored in self.cs
         CommandSequenceController.CalcEndEffectorCommand(self, context, output)
