@@ -108,7 +108,8 @@ class CameraViewer(LeafSystem):
         if not self.here:
             image = color_image.data
             image = np.delete(image, 3, 1)
-
+            
+            # This is a lot of editing of the color and depth images. I am keeping it here if any of it needs to be used later for viewing
             matplotlib.image.imsave("color.jpg", image)
             #image = np.delete(depth_image.data, 3, 1)
             #matplotlib.image.imsave('dotplot.png', depth_image.data)
@@ -216,6 +217,7 @@ class CameraViewer(LeafSystem):
                     # Insert mask image
                     mask_flip = cv2.rotate(masks[k], cv2.ROTATE_180)
                     
+                    # Brighten the mask so the user can see it better
                     for q in range(m):
                         for w in range(p):
                             if mask_flip[q, w] != 0:

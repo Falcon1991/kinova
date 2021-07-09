@@ -5,7 +5,7 @@ from kinova_station.common import draw_open3d_point_cloud, draw_points
 import open3d as o3d
 from scipy.optimize import differential_evolution
 
-class DepthController(CommandSequenceController):
+class DepthControllerHw(CommandSequenceController):
     """
     A controller which uses point cloud data to plan
     and execute a grasp. 
@@ -374,6 +374,8 @@ class DepthController(CommandSequenceController):
         cloud = self.merged_point_cloud
         print(cloud)
 
+        
+
         # Compare each point with all other points to group them together in similar groups of points and normals
         cluster = []
         cluster_p = [] 
@@ -384,15 +386,16 @@ class DepthController(CommandSequenceController):
             c = 0
             for j in range(len(cloud.points)):
                 n2_WS = np.asarray(cloud.normals[j])
-                close0 = (math.fabs(n1_WS[0]-n2_WS[0]) < .1)
-                close1 = (math.fabs(n1_WS[1]-n2_WS[1]) < .1)
-                close2 = (math.fabs(n1_WS[2]-n2_WS[2]) < .1)    
+                # The < .2 is a larger tolerance due to the error caused by the real world and the hardware
+                close0 = (math.fabs(n1_WS[0]-n2_WS[0]) < .2)
+                close1 = (math.fabs(n1_WS[1]-n2_WS[1]) < .2)
+                close2 = (math.fabs(n1_WS[2]-n2_WS[2]) < .2)    
                 if close0:
                     if close1:
                         if close2:
                             c += 1
             # A group is valid if it is a portion of the total points. A side should be large
-            if c > 100:
+            if c > (len(cloud.normals) / 8):
                 cluster.append(n1_WS)
                 cluster_p.append(p1_WS)
 
@@ -463,45 +466,47 @@ class DepthController(CommandSequenceController):
         for i in range(len(sides)):
             n_WS = np.asarray(sides[i])
             p_WS = np.asarray(sides_p[i])
-            if n_WS[2] > .01 and n_WS[2] < (np.pi - .01) and n_WS[0] < (np.pi - .01) and n_WS[0] > .01:
+            if n_WS[1] > .01 and n_WS[1] < (np.pi - .01):
                 break
 
         print("This is the point I am going for: ", p_WS)
 
         # Find the correct pitch/roll/yaw for the arm
-        n_WS = (n_WS * [0, 0, 1]) + [.5*np.pi, 0, .5*np.pi]
+        n_WS = (n_WS * [0, 0, 1]) + [.5*np.pi, 0, .8*np.pi]
 
-        # Calculate the position for the arm to be .1 away from object
-        Xo = p_WS[0]
+        # Calculate the position for the arm to be .1 away from object and orient the arm using some trigonometry
+        # X = p_WS[2] because the point cloud is translated for the hardware. So, X = Z
+        Xo = p_WS[2]
         Yo = p_WS[1]
         Xg = .1 * math.sin(np.pi - n_WS[2])
         Yg = .1 * math.cos(np.pi - n_WS[2])
         X = Xo - Xg
         Y = Yo - Yg
-        X1 = Xo + (Xg/4)
-        Y1 = Yo + (Yg/4)
+        X1 = Xo + (Xg/3)
+        Y1 = Yo + (Yg/3)
 
 
         # Orient gripper and move .1 straight away from the object
+        # The Y+.2 is to correct the position on the hardware. Adjust as needed since the loop is open
         self.cs.append(Command(
             name="line_up",
-            target_pose=np.hstack([n_WS, [X, Y, .1]]),   # Change PitchRollYaw to vector of n_WS normal
+            target_pose=np.hstack([n_WS, [X, Y+.2, .03]]),   # Change PitchRollYaw to vector of n_WS normal
             duration=2,
             gripper_closed=False))
         self.cs.append(Command(
             name="line_up2",
-            target_pose=np.hstack([n_WS, [X, Y, .1]]),   # The same command to kill time and make sure it is
-            duration=2,                                  # in line with the object before moving further towards it
+            target_pose=np.hstack([n_WS, [X, Y+.2, .03]]),   # The same command to kill time and make sure it is
+            duration=2,                                      # in line with the object before moving further towards it
             gripper_closed=False))
         # Move the rest of the way towards the object and grab it
         self.cs.append(Command(
             name="move_towards",
-            target_pose=np.hstack([n_WS, [X1, Y1, .1]]),
+            target_pose=np.hstack([n_WS, [X1, Y1+.2, .03]]),
             duration=2,
             gripper_closed=False))
         self.cs.append(Command(
             name="grip",
-            target_pose=np.hstack([n_WS, [X1, Y1, .1]]),
+            target_pose=np.hstack([n_WS, [X1, Y1+.2, .03]]),
             duration=1,
             gripper_closed=True))
         # Move back to a position to confirm the object is picked up
@@ -559,7 +564,8 @@ class DepthController(CommandSequenceController):
                 self.merged_point_cloud += self.stored_point_clouds[i]
 
             # This downsises the point cloud so that the algorithm to find the sides runs faster
-            self.merged_point_cloud = self.merged_point_cloud.voxel_down_sample(voxel_size=0.005)
+            # Adjust the voxel_size as needed to increase potential accuracy (it was originall .005)
+            self.merged_point_cloud = self.merged_point_cloud.voxel_down_sample(voxel_size=0.1)
 
             # Call a method to calculate the movements to pick up the object based on the point cloud
             self.locateObject()

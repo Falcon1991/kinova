@@ -22,7 +22,7 @@
         </box>
       </geometry>
       <material>
-        <diffuse>0.0 0.0 0.545 1.0</diffuse>
+        <diffuse>0.0 1.0 0.545 1.0</diffuse>
       </material>
     </visual>
 

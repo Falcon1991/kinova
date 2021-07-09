@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import tkinter as tk
 
 from kinova_station import KinovaStationHardwareInterface, EndEffectorTarget
-from controllers import CommandSequenceController, CommandSequence, Command, DepthController
+from controllers import CommandSequenceController, CommandSequence, Command, DepthControllerHw
 from observers.camera_viewer_hw import CameraViewer
 from meshcat.servers.zmqserver import start_zmq_server_as_subprocess
 
@@ -82,7 +82,7 @@ with KinovaStationHardwareInterface() as station:
         duration=3,
         gripper_closed=False))
 
-    controller = builder.AddSystem(DepthController(
+    controller = builder.AddSystem(DepthControllerHw(
         start_sequence=cs,
         command_type=EndEffectorTarget.kWrench,  # wrench commands work best on hardware
         show_candidate_grasp=True,
@@ -161,7 +161,7 @@ with KinovaStationHardwareInterface() as station:
 
     # Set default arm positions
     #station.go_home(name="Home")
-    station.send_pose_command((.55*np.pi, 0.0, .5*np.pi, .5, 0.0, .1))
+    station.send_pose_command((.55*np.pi, 0.0, .5*np.pi, .5, 0.0, .05))
 
     """
     # Set up simulation

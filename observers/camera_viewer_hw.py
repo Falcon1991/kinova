@@ -104,12 +104,16 @@ class CameraViewer(LeafSystem):
         # Get the images here
         color_image = self.color_image_port.Eval(context)
         depth_image = self.depth_image_port.Eval(context)
+            
+        #cv2.imshow("im", color_image.data)
+        #cv2.imshow("im2", depth_image.data)
 
         # Only use Detectron until the point cloud is taken of the object
         if not self.here:
             image = color_image.data
             image = np.delete(image, 3, 1)
-
+            
+            # This is a lot of editing of the color and depth images. I am keeping it here if any of it needs to be used later for viewing
             matplotlib.image.imsave("color.jpg", image)
             #image = np.delete(depth_image.data, 3, 1)
             #matplotlib.image.imsave('dotplot.png', depth_image.data)
@@ -120,7 +124,7 @@ class CameraViewer(LeafSystem):
             #depth_flipped = cv2.rotate(dots, cv2.ROTATE_180) 
             #img = cv2.imread("./input.jpg")
             im = cv2.resize(im, dsize=(480, 270), interpolation=cv2.INTER_CUBIC)
-            #depth = cv2.resize(depth_image.data, dsize=(640, 480), interpolation=cv2.INTER_CUBIC)
+            depth = cv2.resize(depth_image.data, dsize=(480, 270), interpolation=cv2.INTER_CUBIC)
             
             # Use these to show the images 
             #cv2.imshow("color_image", im)
@@ -167,8 +171,8 @@ class CameraViewer(LeafSystem):
             
 
             # Another option to show the segmented image (uncomment both)
-            cv2.imshow("image_seg",out.get_image()[:, :, ::-1])
-            cv2.waitKey()
+            #cv2.imshow("image_seg",out.get_image()[:, :, ::-1])
+            #cv2.waitKey()
             
 
             # Get the masks, classes, and boxes to crop the depth image 
@@ -196,18 +200,18 @@ class CameraViewer(LeafSystem):
                 window.destroy()
             
             n, m, p = masks.shape
-            objects = 716 in classes or 992 in classes or 1036 in classes or 1131 in classes 
-            #if classes contains these objects and !once:
+            # Check if these potentially useful objects are detected. Adjust these values as needed
+            objects = 60 in classes or 326 in classes or 35 in classes or 300 in classes or 132 in classes or 1183 in classes or 716 in classes or 992 in classes or 1036 in classes or 1131 in classes 
             if (not self.once and objects) or self.dir:
                 index = []
+                # Only ask the user about the potentially important objects
                 for g in range(n):
-                    if classes[g] == 716 or classes[g] == 992 or classes[g] == 1036 or classes[g] == 1131:
+                    if classes[g] == 60 or classes[g] == 326 or classes[g] ==  35 or classes[g] == 300 or classes[g] == 132 or classes[g] == 1183 or classes[g] == 716 or classes[g] == 992 or classes[g] == 1036 or classes[g] == 1131:
                         index.append(g)
                 for k in range(len(index)):
                     window = tk.Tk()
                     self.dir = False
                     # Insert segmented image
-                    #seg_flip = cv2.rotate(out.get_image()[:, :, ::-1], cv2.ROTATE_180)
                     cv2.imwrite("seg.jpg", out.get_image()[:, :, ::-1])
                     image_seg = Ime.open("seg.jpg")
                     test = imtk.PhotoImage(image_seg)
@@ -219,8 +223,7 @@ class CameraViewer(LeafSystem):
                     statement.pack()
                 
                     # Insert mask image
-                    #mask_flip = cv2.rotate(masks[k], cv2.ROTATE_180)
-                    
+                    # Brightening mask image
                     for q in range(m):
                         for w in range(p):
                             if masks[index[k], q, w] != 0:
@@ -244,14 +247,27 @@ class CameraViewer(LeafSystem):
                 
                     window.mainloop()
                     
+                    #print(color_image.data.shape)
+                    #print(depth_image.data.shape)
                     if self.here: 
                         # Crop depth image based on identified mask
-                        np.resize(masks, (480, 270))
-                        x, y, z = depth_image.data.shape
-                        for i in range(x-1):
-                            for j in range(y-1):
-                                if masks[index[k], i, j] == 0:
-                                    depth_image.mutable_data[i, j] = 0 
+                        mask1 = cv2.resize(masks[index[k]], (420, 236))
+                        x, y = mask1.shape
+                        cv2.imshow('msk',mask1)
+                        print('This is the shape',len(mask1),len(mask1[0]))
+                        print('x',x,'y',y)
+                        for i in range(x-31):
+                            for j in range(y-18):
+                                if mask1[i][j] == 0:
+                                    # Adjust the values added to perfect the cropping of the point cloud
+                                    # This worked well enough for me. The mask is resized to be 
+                                    # 34 pixels shorter (17 top and bottom) and 60 pixels narrower (30 left and right)
+                                    depth_image.mutable_data[i+17][j+50] = 0
+                                    
+                        for i in range(479):
+                            for j in range(269):
+                                if i < 30 or i > 259 or j < 45 or j > 445:
+                                    depth_image.mutable_data[j,i] = 0
                         # Save mask incase the next frame does not identify one
                         np.save('save.npy', masks)
                         break
@@ -269,34 +285,13 @@ class CameraViewer(LeafSystem):
                 for i in range(x):
                     for j in range(y):
                         #if masks[0, i, j] == 0:
+                        #print("")
                         depth_image.mutable_data[i, j] = 0
             
-            
+            #cv2.imshow("color", color_image.data)
             #cv2.imshow("image", depth_image.data)
             #cv2.waitKey()
 
-            #depth_image = cv2.resize(depth_image.data, dsize=(640,480), interpolation=cv2.INTER_CUBIC) 
-
-
-            # This is another method to crop the depth image using only the boxes of the objects 
-            """ 
-            boxes = outputs["instances"].pred_boxes
-            boxes = boxes.tensor.numpy()
-
-            #boxes = np.uint8(boxes)
-            
-            if len(boxes) != 0:
-                x, y, x1, y1 = boxes[0]
-                x = int(math.floor(x))
-                y = int(math.floor(y))
-                x1 = int(math.ceil(x1))
-                y1 = int(math.ceil(y1))
-                w = x1 - x
-                h = y1 - y
-
-                depth_image = depth_image.data[y:y+h, x:x+w]
-                cv2.imshow("cropped", depth_image.data)
-            """
         
         else:
             # If the point cloud of the object is already stored,
